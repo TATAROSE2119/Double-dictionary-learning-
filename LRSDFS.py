@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import LRSDFS_func
 
 # Load train data
@@ -36,6 +37,12 @@ tol = 1e-6      # 收敛阈值
 prev_W1 = W1.copy()
 prev_W2 = W2.copy()
 
+# 记录每次迭代的范数
+W1_norms = []
+W2_norms = []
+Y1_norms = []
+Y2_norms = []
+
 # 迭代更新
 for iteration in range(max_iter):
     print(f"Iteration: {iteration + 1}")
@@ -60,14 +67,56 @@ for iteration in range(max_iter):
     # 更新 U1 和 U2
     U1, U2 = LRSDFS_func.update_U(Y1=Y1, Y2=Y2)
 
+    # 记录当前范数
+    W1_norms.append(np.linalg.norm(W1))
+    W2_norms.append(np.linalg.norm(W2))
+    Y1_norms.append(np.linalg.norm(Y1))
+    Y2_norms.append(np.linalg.norm(Y2))
+
     # 检查收敛条件
     if np.linalg.norm(W1 - prev_W1) < tol and np.linalg.norm(W2 - prev_W2) < tol:
         print("Convergence reached.")
         break
-    #没有收敛
+    # 没有收敛
     print("Not Convergence.")
     # 更新上一次的字典矩阵
     prev_W1 = W1.copy()
     prev_W2 = W2.copy()
 
+# 绘制范数收敛折线图
+plt.figure(figsize=(10, 6))
+plt.plot(range(len(W1_norms)), W1_norms, label="W1 Norm")
+plt.plot(range(len(W2_norms)), W2_norms, label="W2 Norm")
+plt.plot(range(len(Y1_norms)), Y1_norms, label="Y1 Norm")
+plt.plot(range(len(Y2_norms)), Y2_norms, label="Y2 Norm")
+plt.xlabel("Iteration")
+plt.ylabel("Norm")
+plt.title("Convergence of Matrix Norms")
+plt.legend()
+plt.grid(True)
+plt.show()
 
+# 示例数据
+p = 0.5  # 设置权重参数 p
+q = 0.5  # 设置权重参数 q
+feature_importance = LRSDFS_func.calculate_feature_importance(Y1=Y1, Y2=Y2, p=p, q=q)
+
+# 打印特征重要性
+print("Feature Importance:")
+print(feature_importance)
+
+
+# 假设 l = 10
+l = 10
+
+# 计算特征重要性
+p = 0.5  # 权重参数
+q = 0.5
+feature_importance = LRSDFS_func.calculate_feature_importance(Y1=Y1, Y2=Y2, p=p, q=q)
+
+# 选择前 l 个特征
+Xnew, selected_features_indices = LRSDFS_func.select_top_features(train_data, feature_importance, l)
+
+# 打印结果
+print("Selected Feature Indices (Top l):", selected_features_indices)
+print("Shape of Xnew:", Xnew.shape)

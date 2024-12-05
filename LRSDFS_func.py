@@ -143,3 +143,48 @@ def update_U(Y1, Y2):
 
     return U1, U2
 
+def calculate_feature_importance(Y1, Y2, p=0.5, q=0.5):
+    """
+    计算特征重要性
+    :param Y1: 低秩编码矩阵 (k1 x n)
+    :param Y2: 稀疏编码矩阵 (k2 x n)
+    :param p: 权重参数，默认 0.5
+    :param q: 权重参数，默认 0.5
+    :return: 特征重要性列表
+    """
+    # 检查 p 和 q 是否满足条件
+    assert p + q == 1, "p + q must be equal to 1"
+
+    # 初始化特征重要性列表
+    n_features = Y1.shape[1]  # 特征数目
+    feature_importance = np.zeros(n_features)
+
+    # 逐列计算特征重要性
+    for i in range(n_features):
+        # 计算 Y1 和 Y2 第 i 列的 L2 范数
+        norm_Y1_i = np.linalg.norm(Y1[:, i])
+        norm_Y2_i = np.linalg.norm(Y2[:, i])
+
+        # 计算特征重要性
+        feature_importance[i] = p * norm_Y1_i + q * norm_Y2_i
+
+    return feature_importance
+
+def select_top_features(train_data, eval_scores, l):
+    """
+    根据特征重要性得分选择前 l 个特征，生成新的数据矩阵 Xnew
+    :param train_data: 原始训练数据矩阵 (480, 52)
+    :param eval_scores: 特征重要性得分 (1, 52)
+    :param l: 要选择的特征数量
+    :return: 新的数据矩阵 Xnew
+    """
+    # 对特征重要性得分进行降序排序，获取排序后的索引
+    sorted_indices = np.argsort(eval_scores)[::-1]  # 从大到小排序
+
+    # 选择前 l 个特征的索引
+    top_features_indices = sorted_indices[:l]
+
+    # 根据选出的索引提取对应的列
+    Xnew = train_data[:, top_features_indices]
+
+    return Xnew, top_features_indices
