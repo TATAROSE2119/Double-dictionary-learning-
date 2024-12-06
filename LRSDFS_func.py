@@ -1,5 +1,5 @@
 import numpy as np
-
+from scipy.stats import gaussian_kde
 # 定义逐个元素更新 W1 的函数
 def update_W1(X, W1, W2, Y1, Y2, M, N, a):
     # 获取 W1 的形状
@@ -188,3 +188,67 @@ def select_top_features(train_data, eval_scores, l):
     Xnew = train_data[:, top_features_indices]
 
     return Xnew, top_features_indices
+def calculate_statistics(train_data,new_data, W1, W2, Y1, Y2, Sigma_Y1, Sigma_Y2):
+    """
+    计算新样本的 T² 和 SPE 统计量
+    :param new_data: 新样本矩阵 (960, 52)
+    :param W1: 低秩字典矩阵
+    :param W2: 稀疏字典矩阵
+    :param Y1: 训练阶段的低秩编码矩阵
+    :param Y2: 训练阶段的稀疏编码矩阵
+    :param Sigma_Y1: 低秩编码矩阵的协方差矩阵
+    :param Sigma_Y2: 稀疏编码矩阵的协方差矩阵
+    :return: T² 和 SPE 统计量列表
+    """
+    T2_statistics = []
+    SPE_statistics = []
+
+    # 协方差矩阵的逆
+    Sigma_Y1_inv = np.linalg.inv(Sigma_Y1)
+    Sigma_Y2_inv = np.linalg.inv(Sigma_Y2)
+
+    for x_new in new_data:
+        # Step 1: 标准化新样本（根据训练数据的均值和标准差）
+        x_new_standardized = (x_new - train_data.mean(axis=0)) / train_data.std(axis=0)
+
+        # Step 2: 计算编码矩阵 Y1 和 Y2
+        y1_new = np.linalg.pinv(W1) @ x_new_standardized
+        y2_new = np.linalg.pinv(W2) @ x_new_standardized
+
+        # Step 3: 计算 T² 统计量
+        T2 = (y1_new.T @ Sigma_Y1_inv @ y1_new) + (y2_new.T @ Sigma_Y2_inv @ y2_new)
+        T2_statistics.append(T2)
+
+        # Step 4: 计算 SPE 统计量
+        reconstruction = W1 @ y1_new + W2 @ y2_new
+        SPE = np.linalg.norm(x_new_standardized - reconstruction) ** 2
+        SPE_statistics.append(SPE)
+
+    return T2_statistics, SPE_statistics
+
+
+def calculate_control_limit(statistics, percentile=99):
+    """
+    使用核密度估计 (KDE) 计算给定统计量的控制限。
+
+    :param statistics: array-like, 样本的统计量数据
+    :param percentile: float, 所需的分位数 (0-100)，默认为99
+    :return: 控制限值
+    """
+    # 确保统计量为 NumPy 数组
+    statistics = np.array(statistics)
+
+    # 使用核密度估计拟合数据分布
+    kde = gaussian_kde(statistics)
+
+    # 生成统计量的范围，用于积分
+    statistic_range = np.linspace(statistics.min(), statistics.max(), 1000)
+
+    # 累积分布函数 (CDF)
+    cdf = np.cumsum(kde(statistic_range))
+    cdf /= cdf[-1]  # 归一化到 [0, 1]
+
+    # 找到接近指定百分位数的统计值
+    control_limit = statistic_range[np.searchsorted(cdf, percentile / 100.0)]
+
+    return control_limit
