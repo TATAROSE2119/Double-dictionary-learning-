@@ -32,7 +32,7 @@ i_d = np.ones(480)
 i_c = np.ones(52)
 
 # 设置迭代参数
-max_iter = 10  # 最大迭代次数
+max_iter = 1 # 最大迭代次数
 tol = 1e-6      # 收敛阈值
 prev_W1 = W1.copy()
 prev_W2 = W2.copy()
@@ -94,7 +94,8 @@ plt.ylabel("Norm")
 plt.title("Convergence of Matrix Norms")
 plt.legend()
 plt.grid(True)
-plt.show()
+#保存图片
+plt.savefig('LRSDFS_convergence.png')
 
 # 示例数据
 p = 0.5  # 设置权重参数 p
@@ -120,3 +121,77 @@ Xnew, selected_features_indices = LRSDFS_func.select_top_features(train_data, fe
 # 打印结果
 print("Selected Feature Indices (Top l):", selected_features_indices)
 print("Shape of Xnew:", Xnew.shape)
+
+def calculate_statistics(new_data, W1, W2, Y1, Y2, Sigma_Y1, Sigma_Y2):
+    """
+    计算新样本的 T² 和 SPE 统计量
+    :param new_data: 新样本矩阵 (960, 52)
+    :param W1: 低秩字典矩阵
+    :param W2: 稀疏字典矩阵
+    :param Y1: 训练阶段的低秩编码矩阵
+    :param Y2: 训练阶段的稀疏编码矩阵
+    :param Sigma_Y1: 低秩编码矩阵的协方差矩阵
+    :param Sigma_Y2: 稀疏编码矩阵的协方差矩阵
+    :return: T² 和 SPE 统计量列表
+    """
+    T2_statistics = []
+    SPE_statistics = []
+
+    # 协方差矩阵的逆
+    Sigma_Y1_inv = np.linalg.inv(Sigma_Y1)
+    Sigma_Y2_inv = np.linalg.inv(Sigma_Y2)
+
+    for x_new in new_data:
+        # Step 1: 标准化新样本（根据训练数据的均值和标准差）
+        x_new_standardized = (x_new - train_data.mean(axis=0)) / train_data.std(axis=0)
+
+        # Step 2: 计算编码矩阵 Y1 和 Y2
+        y1_new = np.linalg.pinv(W1) @ x_new_standardized
+        y2_new = np.linalg.pinv(W2) @ x_new_standardized
+
+        # Step 3: 计算 T² 统计量
+        T2 = (y1_new.T @ Sigma_Y1_inv @ y1_new) + (y2_new.T @ Sigma_Y2_inv @ y2_new)
+        T2_statistics.append(T2)
+
+        # Step 4: 计算 SPE 统计量
+        reconstruction = W1 @ y1_new + W2 @ y2_new
+        SPE = np.linalg.norm(x_new_standardized - reconstruction) ** 2
+        SPE_statistics.append(SPE)
+
+    return T2_statistics, SPE_statistics
+
+
+# 示例：加载新的 960 个样本的数据
+new_data = test_data
+
+# 计算协方差矩阵（在训练阶段完成一次即可）
+Sigma_Y1 = np.cov(Y1.T)  # Y1 的协方差矩阵
+Sigma_Y2 = np.cov(Y2.T)  # Y2 的协方差矩阵
+
+# 计算 T² 和 SPE 统计量
+T2_statistics, SPE_statistics = calculate_statistics(new_data, W1, W2, Y1, Y2, Sigma_Y1, Sigma_Y2)
+# 统计图
+# 绘制 T² 统计量折线图
+plt.figure(figsize=(10, 5))
+plt.plot(range(len(T2_statistics)), T2_statistics, label="T² Statistics", marker='o')
+plt.xlabel("Sample Index")
+plt.ylabel("T² Value")
+plt.title("T² Statistics Line Chart")
+plt.legend()
+plt.grid(True)
+# 保存图片
+plt.savefig('LRSDFS_T2.png')
+
+# 绘制 SPE 统计量折线图
+plt.figure(figsize=(10, 5))
+plt.plot(range(len(SPE_statistics)), SPE_statistics, label="SPE Statistics", color='red', marker='x')
+plt.xlabel("Sample Index")
+plt.ylabel("SPE Value")
+plt.title("SPE Statistics Line Chart")
+plt.legend()
+plt.grid(True)
+# 保存图片
+plt.savefig('LRSDFS_SPE.png')
+# 打印结果
+print("T² Statistics:", T2_statistics)
+print("SPE Statistics:", SPE_statistics)
