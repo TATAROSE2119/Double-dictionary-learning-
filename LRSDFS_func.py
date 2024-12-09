@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.stats import gaussian_kde
+from sklearn.neighbors import KernelDensity
+from sklearn.linear_model import Lasso
 # 定义逐个元素更新 W1 的函数
 def update_W1(X, W1, W2, Y1, Y2, M, N, a):
     # 获取 W1 的形状
@@ -10,14 +12,14 @@ def update_W1(X, W1, W2, Y1, Y2, M, N, a):
 
     # 分子部分 (X.T @ X @ Y1.T)
     numerator = X.T @ X @ Y1.T
+    # 分母部分每个元素计算
+    term1 = X.T @ X @W1 @ Y1 @ Y1.T  # 第一项
+    term2 = X.T @ X @ W2 @ Y2 @ Y1.T  # 第二项
+    term3 = a * X.T @ M @ N.T  # 第三项
 
     # 分母部分逐元素计算
     for i in range(rows):
         for j in range(cols):
-            # 分母部分每个元素计算
-            term1 = X.T @ X @ Y1 @ Y1.T  # 第一项
-            term2 = X.T @ X @ W2 @ Y2 @ Y1.T  # 第二项
-            term3 = a * X.T @ M @ N.T  # 第三项
 
             denominator = term1[i, j] + term2[i, j] + term3[i, j]
 
@@ -39,14 +41,14 @@ def update_W2(X, W1, W2, Y1, Y2, i_d, i_c, b):
 
     # 分子部分 (X.T @ X @ Y2.T)
     numerator = X.T @ X @ Y2.T
+    # 分母部分每个元素计算
+    term1 = X.T @ X @ W1 @ Y1 @ Y2.T  # 第一项
+    term2 = X.T @ X @ W2 @ Y2 @ Y2.T  # 第二项
+    term3 = b * X.T @ np.outer(i_d, i_c.T) @ Y2.T  # 第三项
 
     # 分母部分逐元素计算
     for i in range(rows):
         for j in range(cols):
-            # 分母部分每个元素计算
-            term1 = X.T @ X @ W1 @ Y1 @ Y2.T  # 第一项
-            term2 = X.T @ X @ W2 @ Y2 @ Y2.T  # 第二项
-            term3 = b * X.T @ np.outer(i_d, i_c.T) @ Y2.T  # 第三项
 
             denominator = term1[i, j] + term2[i, j] + term3[i, j]
 
@@ -68,15 +70,15 @@ def update_Y1(X, W1, W2, Y1, Y2, U1, c, e):
 
     # 分子部分: W1^T @ X^T @ X + 2eY1
     numerator = W1.T @ X.T @ X + 2 * e * Y1
+    # 分母部分每个元素计算
+    term1 = W1.T @ X.T @ X @ W1 @ Y1  # 第一项
+    term2 = W1.T @ X.T @ X @ W2 @ Y2  # 第二项
+    term3 = c * U1 @ Y1  # 第三项
+    term4 = 2 * e * Y1 @ Y1.T @ Y1  # 第四项
 
     # 分母部分逐元素计算
     for i in range(rows):
         for j in range(cols):
-            # 分母部分每个元素计算
-            term1 = W1.T @ X.T @ X @ W1 @ Y1  # 第一项
-            term2 = W1.T @ X.T @ X @ W2 @ Y2  # 第二项
-            term3 = c * U1 @ Y1  # 第三项
-            term4 = 2 * e * Y1 @ Y1.T @ Y1  # 第四项
 
             denominator = term1[i, j] + term2[i, j] + term3[i, j] + term4[i, j]
 
@@ -98,16 +100,16 @@ def update_Y2(X, W1, W2, Y1, Y2, U2, i_d, i_c, b, d, f):
 
     # 分子部分: W2^T @ X^T @ X + 2fY2
     numerator = W2.T @ X.T @ X + 2 * f * Y2
+    # 分母部分每个元素计算
+    term1 = W2.T @ X.T @ X @ W1 @ Y1  # 第一项
+    term2 = W2.T @ X.T @ X @ W2 @ Y2  # 第二项
+    term3 = b * W2.T @ X.T @ np.outer(i_d, i_c)  # 第三项
+    term4 = d * U2 @ Y2  # 第四项
+    term5 = 2 * f * Y2 @ Y2.T @ Y2  # 第五项
 
     # 分母部分逐元素计算
     for i in range(rows):
         for j in range(cols):
-            # 分母部分每个元素计算
-            term1 = W2.T @ X.T @ X @ W1 @ Y1  # 第一项
-            term2 = W2.T @ X.T @ X @ W2 @ Y2  # 第二项
-            term3 = b * W2.T @ X.T @ np.outer(i_d, i_c)  # 第三项
-            term4 = d * U2 @ Y2  # 第四项
-            term5 = 2 * f * Y2 @ Y2.T @ Y2  # 第五项
 
             denominator = term1[i, j] + term2[i, j] + term3[i, j] + term4[i, j] + term5[i, j]
 
@@ -188,67 +190,57 @@ def select_top_features(train_data, eval_scores, l):
     Xnew = train_data[:, top_features_indices]
 
     return Xnew, top_features_indices
-def calculate_statistics(train_data,new_data, W1, W2, Y1, Y2, Sigma_Y1, Sigma_Y2):
+
+# 计算特征重要性
+
+def calculate_statistics(data, D1, D2, Sigma_Y1, Sigma_Y2, lambda_reg=0.1):
     """
-    计算新样本的 T² 和 SPE 统计量
-    :param new_data: 新样本矩阵 (960, 52)
-    :param W1: 低秩字典矩阵
-    :param W2: 稀疏字典矩阵
-    :param Y1: 训练阶段的低秩编码矩阵
-    :param Y2: 训练阶段的稀疏编码矩阵
-    :param Sigma_Y1: 低秩编码矩阵的协方差矩阵
-    :param Sigma_Y2: 稀疏编码矩阵的协方差矩阵
-    :return: T² 和 SPE 统计量列表
+    逐个样本计算 T² 和 SPE 统计量
+    :param data: 测试数据矩阵 (n_samples, n_features)
+    :param D1: 低秩字典矩阵 (n_features, k1)
+    :param D2: 稀疏字典矩阵 (n_features, k2)
+    :param Sigma_Y1: 低秩编码协方差矩阵
+    :param Sigma_Y2: 稀疏编码协方差矩阵
+    :param lambda_reg: Lasso 正则化参数
+    :return: T² 和 SPE 统计量
     """
     T2_statistics = []
     SPE_statistics = []
 
-    # 协方差矩阵的逆
-    Sigma_Y1_inv = np.linalg.inv(Sigma_Y1)
-    Sigma_Y2_inv = np.linalg.inv(Sigma_Y2)
+    for x in data:
+        # 确保 x 是二维向量
+        x = x.reshape(1, -1)
 
-    for x_new in new_data:
-        # Step 1: 标准化新样本（根据训练数据的均值和标准差）
-        x_new_standardized = (x_new - train_data.mean(axis=0)) / train_data.std(axis=0)
+        # 使用 Lasso 回归求解稀疏编码 y1 和 y2
+        lasso1 = Lasso(alpha=lambda_reg, fit_intercept=False)
+        lasso1.fit(D1, x.ravel())
+        y1 = lasso1.coef_
 
-        # Step 2: 计算编码矩阵 Y1 和 Y2
-        y1_new = np.linalg.pinv(W1) @ x_new_standardized
-        y2_new = np.linalg.pinv(W2) @ x_new_standardized
+        lasso2 = Lasso(alpha=lambda_reg, fit_intercept=False)
+        lasso2.fit(D2, x.ravel())
+        y2 = lasso2.coef_
 
-        # Step 3: 计算 T² 统计量
-        T2 = (y1_new.T @ Sigma_Y1_inv @ y1_new) + (y2_new.T @ Sigma_Y2_inv @ y2_new)
+        # 计算 T² 统计量
+        T2 = y1.T @ np.linalg.inv(Sigma_Y1) @ y1 + y2.T @ np.linalg.inv(Sigma_Y2) @ y2
         T2_statistics.append(T2)
 
-        # Step 4: 计算 SPE 统计量
-        reconstruction = W1 @ y1_new + W2 @ y2_new
-        SPE = np.linalg.norm(x_new_standardized - reconstruction) ** 2
+        # 计算 SPE 统计量
+        reconstruction = D1 @ y1 + D2 @ y2
+        SPE = np.linalg.norm(x - reconstruction) ** 2
         SPE_statistics.append(SPE)
 
-    return T2_statistics, SPE_statistics
+    return np.array(T2_statistics), np.array(SPE_statistics)
 
 
+# Step 2: 计算控制限
 def calculate_control_limit(statistics, percentile=99):
     """
-    使用核密度估计 (KDE) 计算给定统计量的控制限。
-
-    :param statistics: array-like, 样本的统计量数据
-    :param percentile: float, 所需的分位数 (0-100)，默认为99
+    使用 KDE 方法计算统计量的控制限
+    :param statistics: 输入的统计量数组
+    :param percentile: 控制限百分位
     :return: 控制限值
     """
-    # 确保统计量为 NumPy 数组
-    statistics = np.array(statistics)
-
-    # 使用核密度估计拟合数据分布
-    kde = gaussian_kde(statistics)
-
-    # 生成统计量的范围，用于积分
-    statistic_range = np.linspace(statistics.min(), statistics.max(), 1000)
-
-    # 累积分布函数 (CDF)
-    cdf = np.cumsum(kde(statistic_range))
-    cdf /= cdf[-1]  # 归一化到 [0, 1]
-
-    # 找到接近指定百分位数的统计值
-    control_limit = statistic_range[np.searchsorted(cdf, percentile / 100.0)]
-
-    return control_limit
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(statistics[:, None])
+    scores = kde.score_samples(statistics[:, None])
+    threshold = np.percentile(statistics, percentile)
+    return threshold
