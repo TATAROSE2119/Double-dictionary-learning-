@@ -145,102 +145,61 @@ def update_U(Y1, Y2):
 
     return U1, U2
 
-def calculate_feature_importance(Y1, Y2, p=0.5, q=0.5):
+#计算统计量
+def calculate_statistics(X_new, D1, D2, a=0.5, b=0.5):
     """
-    计算特征重要性
-    :param Y1: 低秩编码矩阵 (k1 x n)
-    :param Y2: 稀疏编码矩阵 (k2 x n)
-    :param p: 权重参数，默认 0.5
-    :param q: 权重参数，默认 0.5
-    :return: 特征重要性列表
+    根据第二种方法逐个样本计算 T² 和 SPE 统计量
+    :param X_new: 新数据矩阵 (n_features, n_samples)
+    :param D1: 低秩字典矩阵
+    :param D2: 稀疏字典矩阵
+    :param a: T² 统计量中低秩部分的权重
+    :param b: T² 统计量中稀疏部分的权重
+    :return: T² 和 SPE 统计量列表
     """
-    # 检查 p 和 q 是否满足条件
-    assert p + q == 1, "p + q must be equal to 1"
-
-    # 初始化特征重要性列表
-    n_features = Y1.shape[1]  # 特征数目
-    feature_importance = np.zeros(n_features)
-
-    # 逐列计算特征重要性
-    for i in range(n_features):
-        # 计算 Y1 和 Y2 第 i 列的 L2 范数
-        norm_Y1_i = np.linalg.norm(Y1[:, i])
-        norm_Y2_i = np.linalg.norm(Y2[:, i])
-
-        # 计算特征重要性
-        feature_importance[i] = p * norm_Y1_i + q * norm_Y2_i
-
-    return feature_importance
-
-def select_top_features(train_data, eval_scores, l):
-    """
-    根据特征重要性得分选择前 l 个特征，生成新的数据矩阵 Xnew
-    :param train_data: 原始训练数据矩阵 (480, 52)
-    :param eval_scores: 特征重要性得分 (1, 52)
-    :param l: 要选择的特征数量
-    :return: 新的数据矩阵 Xnew
-    """
-    # 对特征重要性得分进行降序排序，获取排序后的索引
-    sorted_indices = np.argsort(eval_scores)[::-1]  # 从大到小排序
-
-    # 选择前 l 个特征的索引
-    top_features_indices = sorted_indices[:l]
-
-    # 根据选出的索引提取对应的列
-    Xnew = train_data[:, top_features_indices]
-
-    return Xnew, top_features_indices
-
-# 计算特征重要性
-
-def calculate_statistics(data, D1, D2, Sigma_Y1, Sigma_Y2, lambda_reg=0.1):
-    """
-    逐个样本计算 T² 和 SPE 统计量
-    :param data: 测试数据矩阵 (n_samples, n_features)
-    :param D1: 低秩字典矩阵 (n_features, k1)
-    :param D2: 稀疏字典矩阵 (n_features, k2)
-    :param Sigma_Y1: 低秩编码协方差矩阵
-    :param Sigma_Y2: 稀疏编码协方差矩阵
-    :param lambda_reg: Lasso 正则化参数
-    :return: T² 和 SPE 统计量
-    """
+    n_samples = X_new.shape[1]  # 样本数
     T2_statistics = []
     SPE_statistics = []
 
-    for x in data:
-        # 确保 x 是二维向量
-        x = x.reshape(1, -1)
+    for i in range(n_samples):
+        # 获取单个样本 x
+        x = X_new[:, i].reshape(-1, 1)  # 转为列向量
 
-        # 使用 Lasso 回归求解稀疏编码 y1 和 y2
-        lasso1 = Lasso(alpha=lambda_reg, fit_intercept=False)
-        lasso1.fit(D1, x.ravel())
-        y1 = lasso1.coef_
+        # 计算编码矩阵的估计值
+        Y1_hat = np.linalg.pinv(D1.T @ D1) @ D1.T @ x
+        Y2_hat = np.linalg.pinv(D2.T @ D2) @ D2.T @ x
 
-        lasso2 = Lasso(alpha=lambda_reg, fit_intercept=False)
-        lasso2.fit(D2, x.ravel())
-        y2 = lasso2.coef_
+        # 重构样本
+        X_new_hat = D1 @ Y1_hat + D2 @ Y2_hat
 
         # 计算 T² 统计量
-        T2 = y1.T @ np.linalg.inv(Sigma_Y1) @ y1 + y2.T @ np.linalg.inv(Sigma_Y2) @ y2
-        T2_statistics.append(T2)
+        T2 = a * Y1_hat.T  @  Y1_hat + b * Y2_hat.T @ Y2_hat
+        T2_statistics.append(T2.item())  # 转为标量
 
         # 计算 SPE 统计量
-        reconstruction = D1 @ y1 + D2 @ y2
-        SPE = np.linalg.norm(x - reconstruction) ** 2
-        SPE_statistics.append(SPE)
+        SPE = (x - X_new_hat).T @ (x - X_new_hat)
+        SPE_statistics.append(SPE.item())
 
     return np.array(T2_statistics), np.array(SPE_statistics)
 
-
-# Step 2: 计算控制限
-def calculate_control_limit(statistics, percentile=99):
+# 计算控制限
+def calculate_control_limit_kde(statistics, bandwidth=0.2, percentile=99):
     """
     使用 KDE 方法计算统计量的控制限
-    :param statistics: 输入的统计量数组
-    :param percentile: 控制限百分位
+    :param statistics: 输入的统计量数组 (一维数组)
+    :param bandwidth: KDE 的带宽参数
+    :param percentile: 控制限的百分位 (默认为 99)
     :return: 控制限值
     """
-    kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(statistics[:, None])
-    scores = kde.score_samples(statistics[:, None])
-    threshold = np.percentile(statistics, percentile)
-    return threshold
+    # 将统计量转为二维列向量
+    statistics = np.array(statistics).reshape(-1, 1)
+
+    # 使用 KDE 拟合数据
+    kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth)
+    kde.fit(statistics)
+
+    # 生成估计分布的概率密度值
+    density = np.exp(kde.score_samples(statistics))
+
+    # 计算指定百分位数的控制限
+    control_limit = np.percentile(statistics, percentile)
+    return control_limit
