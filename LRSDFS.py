@@ -7,13 +7,13 @@ import LRSDFS_func
 
 # 初始化参数
 k1 = 10
-k2 = 30
+k2 = 10
 max_iter = 100  # 最大迭代次数
 tol = 1e-6     # 收敛阈值
 
 # 循环处理从 d00 到 d21 的数据
 for i in range(22):  # 遍历 d00 到 d21
-    train_file = f'TE_data/train_data/d{i:02d}.dat'  # 格式化文件名
+    train_file = 'TE_data/train_data/d00.dat'  # 格式化文件名
     test_file = f'TE_data/test_data/d{i:02d}_te.dat'
 
     print(f"Processing Train Data: {train_file}, Test Data: {test_file}")
@@ -106,7 +106,7 @@ for i in range(22):  # 遍历 d00 到 d21
     # plt.show()
 
     # 计算统计量
-    T2_statistics, SPE_statistics = LRSDFS_func.calculate_statistics(X_new=test_data, D1=D1, D2=D2, a=0.5, b=0.5)
+    T2_statistics, SPE_statistics = LRSDFS_func.calculate_statistics(X_new=test_data, D1=D1, D2=D2, a=1, b=0)
 
     # 计算控制限
     T2_control_limit = LRSDFS_func.calculate_control_limit_kde(statistics=T2_statistics, percentile=99)
@@ -126,6 +126,6 @@ for i in range(22):  # 遍历 d00 到 d21
     plt.axhline(y=SPE_control_limit, color='r', linestyle='--', label='Control Limit')
     plt.xlabel('Sample Index')
     plt.ylabel('SPE Value')
-    plt.legend()
+    plt.legend() # 显示图例
     plt.title(f'SPE Statistics for {test_file}')
     plt.show()

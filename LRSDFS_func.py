@@ -173,6 +173,7 @@ def calculate_statistics(X_new, D1, D2, a=0.5, b=0.5):
 
         # 计算 T² 统计量
         T2 = a * Y1_hat.T  @  Y1_hat + b * Y2_hat.T @ Y2_hat
+        #T2=(a*Y1_hat+b*Y2_hat).T@(a*Y1_hat+b*Y2_hat)
         T2_statistics.append(T2.item())  # 转为标量
 
         # 计算 SPE 统计量
