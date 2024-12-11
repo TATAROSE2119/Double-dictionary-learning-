@@ -1,7 +1,5 @@
 import numpy as np
-from scipy.stats import gaussian_kde
 from sklearn.neighbors import KernelDensity
-from sklearn.linear_model import Lasso
 # 定义逐个元素更新 W1 的函数
 def update_W1(X, W1, W2, Y1, Y2, M, N, a):
     # 获取 W1 的形状
@@ -25,7 +23,7 @@ def update_W1(X, W1, W2, Y1, Y2, M, N, a):
 
             # 更新 W1 的元素
             if denominator > 1e-8:  # 防止除以零
-                W1_new[i, j] = numerator[i, j] / denominator
+                W1_new[i, j] = W1[i,j]*numerator[i, j] / denominator
             else:
                 W1_new[i, j] = 0.0
 
@@ -54,7 +52,7 @@ def update_W2(X, W1, W2, Y1, Y2, i_d, i_c, b):
 
             # 更新 W2 的元素
             if denominator > 1e-8:  # 防止除以零
-                W2_new[i, j] = numerator[i, j] / denominator
+                W2_new[i, j] = W2[i,j]*numerator[i, j] / denominator
             else:
                 W2_new[i, j] = 0.0
 
@@ -84,7 +82,7 @@ def update_Y1(X, W1, W2, Y1, Y2, U1, c, e):
 
             # 更新 Y1 的元素
             if denominator > 1e-8:  # 防止除以零
-                Y1_new[i, j] = numerator[i, j] / denominator
+                Y1_new[i, j] = Y1[i,j]*numerator[i, j] / denominator
             else:
                 Y1_new[i, j] = 0.0
 
@@ -115,7 +113,7 @@ def update_Y2(X, W1, W2, Y1, Y2, U2, i_d, i_c, b, d, f):
 
             # 更新 Y2 的元素
             if denominator > 1e-8:  # 防止除以零
-                Y2_new[i, j] = numerator[i, j] / denominator
+                Y2_new[i, j] = Y2[i,j]*numerator[i, j] / denominator
             else:
                 Y2_new[i, j] = 0.0
 
@@ -181,26 +179,3 @@ def calculate_statistics(X_new, D1, D2, a=0.5, b=0.5):
         SPE_statistics.append(SPE.item())
 
     return np.array(T2_statistics), np.array(SPE_statistics)
-
-# 计算控制限
-def calculate_control_limit_kde(statistics, bandwidth=0.2, percentile=99):
-    """
-    使用 KDE 方法计算统计量的控制限
-    :param statistics: 输入的统计量数组 (一维数组)
-    :param bandwidth: KDE 的带宽参数
-    :param percentile: 控制限的百分位 (默认为 99)
-    :return: 控制限值
-    """
-    # 将统计量转为二维列向量
-    statistics = np.array(statistics).reshape(-1, 1)
-
-    # 使用 KDE 拟合数据
-    kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth)
-    kde.fit(statistics)
-
-    # 生成估计分布的概率密度值
-    density = np.exp(kde.score_samples(statistics))
-
-    # 计算指定百分位数的控制限
-    control_limit = np.percentile(statistics, percentile)
-    return control_limit
