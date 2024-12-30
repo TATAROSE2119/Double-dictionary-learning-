@@ -179,3 +179,35 @@ def calculate_statistics(X_new, D1, D2, a=0.5, b=0.5):
         SPE_statistics.append(SPE.item())
 
     return np.array(T2_statistics), np.array(SPE_statistics)
+
+
+def calculate_relerr(W1_k, W1_k1, Y1_k, Y1_k1,W2_k, W2_k1, Y2_k, Y2_k1):
+    """
+    计算相对误差 RelErr.
+
+    参数:
+
+    返回:
+    RelErr: float，相对误差
+    """
+    # 计算分子部分
+    numerator_W1 = np.linalg.norm(W1_k1 - W1_k, 'fro')  # ||W1_k+1 - W1_k||_F
+    numerator_Y1 = np.linalg.norm(Y1_k - Y1_k1, 'fro')  # ||H_k+1 - H_k||_F
+    numerator_W2 = np.linalg.norm(W2_k1 - W2_k, 'fro')
+    numerator_Y2 = np.linalg.norm(Y2_k - Y2_k1, 'fro')
+
+    # 计算分母部分，防止除以零
+    denominator_W1 = np.linalg.norm(W1_k, 'fro') + 1
+    denominator_Y1 = np.linalg.norm(Y1_k, 'fro') + 1
+    denominator_W2 = np.linalg.norm(W2_k, 'fro') + 1
+    denominator_Y2 = np.linalg.norm(Y2_k, 'fro') + 1
+
+    # 计算两个比值
+    relerr_W1 = numerator_W1 / denominator_W1
+    relerr_Y1 = numerator_Y1 / denominator_Y1
+    relerr_W2 = numerator_W2 / denominator_W2
+    relerr_Y2 = numerator_Y2 / denominator_Y2
+
+    # 取最大值
+    RelErr = max(relerr_W1, relerr_Y1, relerr_W2, relerr_Y2)
+    return RelErr
