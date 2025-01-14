@@ -21,8 +21,8 @@ if not os.path.exists('plts/dictionary'):
 if not os.path.exists('convergence_error'):
     os.makedirs('convergence_error')
 # 初始化参数
-k1 = 10 #低秩
-k2 = 40 #稀疏
+k1 = 52 #低秩
+k2 = 52 #稀疏
 max_iter = 500  # 最大迭代次数
 tol = 1e-3     # 收敛阈值
 train_file = 'TE_data/train_data/d00.dat'  # 格式化文件名
@@ -93,16 +93,16 @@ for i in range(1,22):  # 遍历 d00 到 d21
         prev_Y2 = Y2.copy()
 
         # 更新 W1
-        W1 = LRSDFS_func.update_W1(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, M=M, N=N, a=0.5)
+        W1 = LRSDFS_func.update_W1(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, M=M, N=N, a=0.3)
 
         # 更新 W2
-        W2 = LRSDFS_func.update_W2(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, i_d=i_d, i_c=i_c, b=0.5)
+        W2 = LRSDFS_func.update_W2(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, i_d=i_d, i_c=i_c, b=0.1)
 
         # 更新 Y1
-        Y1 = LRSDFS_func.update_Y1(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, U1=U1, c=10, e=10)
+        Y1 = LRSDFS_func.update_Y1(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, U1=U1, c=1e5, e=10)
 
         # 更新 Y2
-        Y2 = LRSDFS_func.update_Y2(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, U2=U2, i_d=i_d, i_c=i_c, b=0.5, d=10, f=10)
+        Y2 = LRSDFS_func.update_Y2(X=train_data, W1=W1, W2=W2, Y1=Y1, Y2=Y2, U2=U2, i_d=i_d, i_c=i_c, b=0.3, d=1e5, f=10)
 
         # 更新 U1 和 U2
         U1, U2 = LRSDFS_func.update_U(Y1=Y1, Y2=Y2)
@@ -148,12 +148,12 @@ for i in range(1,22):  # 遍历 d00 到 d21
     # plt.savefig(f'plts/convergence_error/d{i:02d}.png')
 
     # 计算统计量
-    T2_statistics, SPE_statistics = LRSDFS_func.calculate_statistics(X_new=test_data, D1=D1, D2=D2, a=0.3, b=0.7)
+    T2_statistics, SPE_statistics = LRSDFS_func.calculate_statistics(X_new=test_data, D1=D1, D2=D2, a=0.5, b=0.5)
 
     # 使用核密度估计计算 T² 和 SPE 的控制限
     alpha = 0.99  # 置信水平
     #计算训练数据的统计量
-    T2_train, SPE_train = LRSDFS_func.calculate_statistics(X_new=train_data, D1=D1, D2=D2, a=0.3, b=0.7)
+    T2_train, SPE_train = LRSDFS_func.calculate_statistics(X_new=train_data, D1=D1, D2=D2, a=0.5, b=0.5)
 
     # T² 控制限
     kde_T2 = gaussian_kde(T2_train)
